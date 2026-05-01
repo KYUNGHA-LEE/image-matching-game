@@ -26,6 +26,37 @@ const stateRef = () => dbRef(db, `rooms/${ROOM}/state`);
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+/* ------------------------- 효과음 (Web Audio) ------------------------- */
+let _audioCtx = null;
+function getAudioCtx() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    return _audioCtx;
+  } catch { return null; }
+}
+function playTone(freq = 800, duration = 0.06, vol = 0.15, type = "sine") {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch {}
+}
+const sfx = {
+  click: () => playTone(800, 0.05, 0.12, "sine"),       // 일반 버튼: 짧은 톡
+  tile:  () => playTone(1100, 0.07, 0.15, "triangle"),  // 타일 점령: 살짝 높은 톡
+  ok:    () => { playTone(660, 0.08, 0.18, "sine"); setTimeout(() => playTone(990, 0.12, 0.18, "sine"), 80); }, // 성공 도-솔
+  start: () => { playTone(523, 0.1, 0.2, "triangle"); setTimeout(() => playTone(659, 0.1, 0.2, "triangle"), 110); setTimeout(() => playTone(784, 0.18, 0.2, "triangle"), 220); }, // 도미솔
+  end:   () => { playTone(880, 0.15, 0.2, "sine"); setTimeout(() => playTone(660, 0.2, 0.18, "sine"), 160); }, // 종료
+};
+
 /* 이미지 파일 → 자동 리사이즈 → Base64 dataURL 변환 */
 function fileToResizedDataUrl(file, maxDim = IMG_MAX_DIM, quality = IMG_QUALITY) {
   return new Promise((resolve, reject) => {
@@ -124,10 +155,12 @@ function RoleSelect({ onPick }) {
         <h1 style={{margin: 0, fontSize: 32, color: "#fff"}}>🎯 AI 이미지 배틀</h1>
         <p style={{color: "#cbd5e1", marginTop: 8}}>실시간 이미지 점령 게임</p>
         <div style={{display: "flex", gap: 12, marginTop: 24, justifyContent: "center"}}>
-          <button style={{...S.btn, ...S.btnPrimary, fontSize: 18, padding: "14px 28px"}} onClick={() => onPick("student")}>
+          <button style={{...S.btn, ...S.btnPrimary, fontSize: 18, padding: "14px 28px"}}
+                  onClick={() => { sfx.click(); onPick("student"); }}>
             🙋 학생으로 입장
           </button>
-          <button style={{...S.btn, ...S.btnGhost, fontSize: 18, padding: "14px 28px"}} onClick={() => onPick("teacher")}>
+          <button style={{...S.btn, ...S.btnGhost, fontSize: 18, padding: "14px 28px"}}
+                  onClick={() => { sfx.click(); onPick("teacher"); }}>
             🧑‍🏫 선생님으로 입장
           </button>
         </div>
@@ -143,6 +176,20 @@ function StudentPanel({ meId, meName, onJoined, onExit }) {
   const room = useRoom();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const prevPhaseRef = useRef(null);
+
+  // phase가 바뀔 때마다 효과음 알림 (학생도 자동으로 들음)
+  useEffect(() => {
+    if (!meId) return;
+    const phase = room.state?.phase;
+    const prev = prevPhaseRef.current;
+    if (phase && phase !== prev) {
+      if (phase === "ready") sfx.ok();        // 매칭 완료
+      if (phase === "playing") sfx.start();   // 게임 시작
+      if (phase === "ended") sfx.end();       // 게임 종료
+      prevPhaseRef.current = phase;
+    }
+  }, [room.state?.phase, meId]);
 
   const join = async () => {
     const n = name.trim();
@@ -156,6 +203,7 @@ function StudentPanel({ meId, meName, onJoined, onExit }) {
       name: n,
       joinedAt: Date.now(),
     });
+    sfx.ok();
     onJoined(id, n);
   };
 
@@ -176,8 +224,8 @@ function StudentPanel({ meId, meName, onJoined, onExit }) {
           />
           {error && <div style={{color: "#f87171", fontSize: 13, marginTop: 8}}>{error}</div>}
           <div style={{display: "flex", gap: 8, marginTop: 16}}>
-            <button style={{...S.btn, ...S.btnPrimary, flex: 1}} onClick={join}>입장</button>
-            <button style={{...S.btn, ...S.btnGhost}} onClick={onExit}>← 뒤로</button>
+            <button style={{...S.btn, ...S.btnPrimary, flex: 1}} onClick={() => { sfx.click(); join(); }}>입장</button>
+            <button style={{...S.btn, ...S.btnGhost}} onClick={() => { sfx.click(); onExit(); }}>← 뒤로</button>
           </div>
           <PlayerList players={room.players} highlight={meId} />
         </div>
@@ -191,16 +239,57 @@ function StudentPanel({ meId, meName, onJoined, onExit }) {
   if (phase === "ended")   return <ResultScreen room={room} meId={meId} onExit={onExit} />;
 
   // lobby 또는 ready
+  const myImg = room.matchings[meId] && room.images[room.matchings[meId]];
   return (
     <div style={S.bg}>
-      <div style={{...S.card, maxWidth: 540}}>
+      <div style={{...S.card, maxWidth: 600}}>
         <h2 style={{color: "#fff", marginTop: 0}}>🙋 {meName} 님 입장 완료</h2>
-        <p style={{color: "#cbd5e1"}}>선생님이 게임을 시작할 때까지 기다려주세요.</p>
-        <PlayerList players={room.players} highlight={meId} matchings={room.matchings} images={room.images} />
-        <div style={{marginTop: 16, color:"#fbbf24", fontSize: 14}}>
-          {phase === "ready" ? "✅ 매칭 완료! 곧 시작됩니다…" : "⏳ 대기 중…"}
+
+        {/* 매칭이 끝났으면 내 이미지를 큼지막하게 보여줌 */}
+        {phase === "ready" && myImg && (
+          <div style={{
+            textAlign: "center", marginTop: 16, padding: 20,
+            background: "rgba(251,191,36,0.08)",
+            border: "2px solid #fbbf24", borderRadius: 16,
+          }}>
+            <div style={{color: "#fbbf24", fontSize: 18, fontWeight: 800, marginBottom: 12}}>
+              ✨ 내 이미지가 매칭됐어요! ✨
+            </div>
+            <img
+              src={myImg.dataUrl}
+              alt=""
+              style={{
+                width: 240, height: 240, objectFit: "cover",
+                borderRadius: 16, border: "4px solid #fbbf24",
+                boxShadow: "0 0 30px rgba(251,191,36,0.55)",
+              }}
+            />
+            <div style={{color: "#fff", fontSize: 14, marginTop: 14, fontWeight: 600}}>
+              📝 이 이미지를 잘 기억해두세요!
+            </div>
+            <div style={{color: "#cbd5e1", fontSize: 12, marginTop: 4}}>
+              곧 게임이 시작됩니다…
+            </div>
+          </div>
+        )}
+
+        {/* 매칭 전 (lobby) */}
+        {phase !== "ready" && (
+          <>
+            <p style={{color: "#cbd5e1"}}>선생님이 게임을 시작할 때까지 기다려주세요.</p>
+            <div style={{marginTop: 16, color:"#94a3b8", fontSize: 14}}>⏳ 대기 중…</div>
+          </>
+        )}
+
+        <div style={{marginTop: 16}}>
+          <div style={{color: "#cbd5e1", fontSize: 13, marginBottom: 6}}>
+            👥 입장한 학생 ({Object.keys(room.players).length}명)
+          </div>
+          <PlayerList players={room.players} highlight={meId} matchings={room.matchings} images={room.images} />
         </div>
-        <button style={{...S.btn, ...S.btnGhost, marginTop: 12}} onClick={onExit}>나가기</button>
+
+        <button style={{...S.btn, ...S.btnGhost, marginTop: 16}}
+                onClick={() => { sfx.click(); onExit(); }}>나가기</button>
       </div>
     </div>
   );
@@ -237,8 +326,11 @@ function TeacherPanel({ onExit }) {
           {pwdError && <div style={{color: "#f87171", fontSize: 13, marginTop: 8}}>{pwdError}</div>}
           <div style={{display: "flex", gap: 8, marginTop: 16}}>
             <button style={{...S.btn, ...S.btnPrimary, flex: 1}}
-              onClick={() => pwd === T_PASS ? setAuthed(true) : setPwdError("비밀번호가 틀립니다")}>입장</button>
-            <button style={{...S.btn, ...S.btnGhost}} onClick={onExit}>← 뒤로</button>
+              onClick={() => {
+                if (pwd === T_PASS) { sfx.ok(); setAuthed(true); }
+                else { sfx.click(); setPwdError("비밀번호가 틀립니다"); }
+              }}>입장</button>
+            <button style={{...S.btn, ...S.btnGhost}} onClick={() => { sfx.click(); onExit(); }}>← 뒤로</button>
           </div>
         </div>
       </div>
@@ -290,6 +382,7 @@ function TeacherPanel({ onExit }) {
     await set(matchingsRef(), matchings);
     await set(stateRef(), { phase: "ready", duration });
     await remove(tilesRef()); // 이전 게임 타일 청소
+    sfx.ok();
   };
 
   /* ------- 게임 시작 ------- */
@@ -337,6 +430,7 @@ function TeacherPanel({ onExit }) {
     const endsAt = startedAt + duration * 1000;
     await set(tilesRef(), tiles);
     await set(stateRef(), { phase: "playing", duration, cols, rows, startedAt, endsAt });
+    sfx.start();
   };
 
   /* ------- 게임 종료 / 리셋 ------- */
@@ -572,6 +666,7 @@ function ArenaCore({ room, meId, meName, isTeacher, onExit, onEnd }) {
     if (state?.phase !== "playing") return;
     if (currentOwner === meId) return; // 내 타일은 클릭 무시
     if (!matchings[meId]) return;       // 나에게 매칭된 이미지가 없으면 무시
+    sfx.tile();
     try {
       // 트랜잭션: 다른 사람이 동시에 점령했어도 last-writer-wins
       await update(dbRef(db, `rooms/${ROOM}/tiles/${tileId}`), { ownerId: meId });
@@ -807,4 +902,4 @@ const S = {
   btnPrimary: { background: "#3b82f6", color: "#fff" },
   btnSuccess: { background: "#22c55e", color: "#fff" },
   btnGhost:   { background: "#334155", color: "#fff" },
-}; 
+};
