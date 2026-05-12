@@ -542,8 +542,74 @@ function TeacherPanel({ onExit }) {
 function PlayerList({ players, highlight, compact, matchings, images }) {
   const arr = Object.entries(players).sort((a,b) => (a[1].joinedAt||0) - (b[1].joinedAt||0));
   if (!arr.length) return <div style={{color: "#94a3b8", fontSize: 13}}>아직 입장한 학생이 없습니다.</div>;
+
+  // 매칭 진행도 (선생님 화면에서만 활용)
+  const matchedCount = matchings ? arr.filter(([pid]) => matchings[pid]).length : 0;
+  const totalCount = arr.length;
+
+  /* ---------- 선생님 패널(compact): 매칭 결과를 큼지막하게 ---------- */
+  if (compact) {
+    return (
+      <div style={{display: "flex", flexDirection: "column", gap: 6, marginTop: 0}}>
+        {matchings && (
+          <div style={{
+            fontSize: 12, color: matchedCount === totalCount && totalCount > 0 ? "#22c55e" : "#94a3b8",
+            fontWeight: 700, marginBottom: 4,
+          }}>
+            {matchedCount === totalCount && totalCount > 0
+              ? `✅ 매칭 완료 (${matchedCount}/${totalCount}명)`
+              : `⏳ 매칭 진행 상태 (${matchedCount}/${totalCount}명)`}
+          </div>
+        )}
+        {arr.map(([pid, p]) => {
+          const matchedImg = matchings && images ? images[matchings[pid]] : null;
+          const isMatched = !!matchedImg;
+          return (
+            <div key={pid}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 10,
+                background: isMatched ? "rgba(34,197,94,0.10)" : "#1e293b",
+                color: "#fff",
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                border: `1px solid ${isMatched ? "#22c55e" : "#334155"}`,
+                transition: "background 0.2s, border 0.2s",
+              }}>
+              <span style={{fontWeight: 600, minWidth: 70, maxWidth: 110,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+                {p.name}
+              </span>
+              {isMatched ? (
+                <>
+                  <span style={{color: "#22c55e", fontSize: 18, fontWeight: 800}}>→</span>
+                  <img src={matchedImg.dataUrl} alt=""
+                       style={{width: 44, height: 44, objectFit: "cover", borderRadius: 6,
+                               border: "2px solid #22c55e"}} />
+                  <span style={{color: "#cbd5e1", fontSize: 11,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                maxWidth: 100}}>
+                    {matchedImg.fileName || ""}
+                  </span>
+                  <span style={{color: "#22c55e", fontSize: 12, fontWeight: 700, marginLeft: "auto"}}>
+                    ✓ 매칭됨
+                  </span>
+                </>
+              ) : (
+                <span style={{color: "#94a3b8", fontSize: 12, marginLeft: "auto"}}>⌛ 매칭 대기</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* ---------- 학생 패널(non-compact): 기존 칩 형태 ---------- */
   return (
-    <div style={{display: "flex", flexWrap: "wrap", gap: 6, marginTop: compact ? 0 : 12}}>
+    <div style={{display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12}}>
       {arr.map(([pid, p]) => {
         const matchedImg = matchings && images ? images[matchings[pid]] : null;
         return (
