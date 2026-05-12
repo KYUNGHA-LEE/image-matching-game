@@ -367,6 +367,15 @@ function TeacherPanel({ onExit }) {
     } catch (err) { alert("삭제 실패: " + err.message); }
   };
 
+  /* ------- 학생 삭제 (튕겨서 중복 입장한 경우 등) ------- */
+  const removePlayer = async (pid, name) => {
+    if (!confirm(`'${name}' 학생을 목록에서 제거할까요?\n(매칭 정보와 배정된 이미지도 함께 정리됩니다)`)) return;
+    try {
+      await remove(dbRef(db, `rooms/${ROOM}/players/${pid}`));
+      await remove(dbRef(db, `rooms/${ROOM}/matchings/${pid}`));
+    } catch (err) { alert("삭제 실패: " + err.message); }
+  };
+
   /* ------- 매칭 (학생 ↔ 이미지) ------- */
   const doMatching = async () => {
     const playerIds = Object.keys(room.players);
@@ -481,7 +490,7 @@ function TeacherPanel({ onExit }) {
           {/* 리스트 1: 학생 */}
           <div style={S.subCard}>
             <h3 style={{margin: "0 0 8px", color: "#fff"}}>📋 리스트 1 — 학생 ({Object.keys(room.players).length})</h3>
-            <PlayerList players={room.players} matchings={room.matchings} images={room.images} compact />
+            <PlayerList players={room.players} matchings={room.matchings} images={room.images} compact onRemovePlayer={removePlayer} />
           </div>
 
           {/* 리스트 2: 이미지 */}
@@ -539,7 +548,7 @@ function TeacherPanel({ onExit }) {
 /* =======================================================================
  *  공용 — 학생 리스트
  * =====================================================================*/
-function PlayerList({ players, highlight, compact, matchings, images }) {
+function PlayerList({ players, highlight, compact, matchings, images, onRemovePlayer }) {
   const arr = Object.entries(players).sort((a,b) => (a[1].joinedAt||0) - (b[1].joinedAt||0));
   if (!arr.length) return <div style={{color: "#94a3b8", fontSize: 13}}>아직 입장한 학생이 없습니다.</div>;
 
@@ -550,7 +559,13 @@ function PlayerList({ players, highlight, compact, matchings, images }) {
   /* ---------- 선생님 패널(compact): 매칭 결과를 큼지막하게 ---------- */
   if (compact) {
     return (
-      <div style={{display: "flex", flexDirection: "column", gap: 6, marginTop: 0}}>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 6, marginTop: 0,
+        maxHeight: "calc(100vh - 360px)",
+        minHeight: 160,
+        overflowY: "auto",
+        paddingRight: 4,
+      }}>
         {matchings && (
           <div style={{
             fontSize: 12, color: matchedCount === totalCount && totalCount > 0 ? "#22c55e" : "#94a3b8",
@@ -600,6 +615,23 @@ function PlayerList({ players, highlight, compact, matchings, images }) {
               ) : (
                 <span style={{color: "#94a3b8", fontSize: 12, marginLeft: "auto"}}>⌛ 매칭 대기</span>
               )}
+              {onRemovePlayer && (
+                <button
+                  onClick={() => onRemovePlayer(pid, p.name)}
+                  title="이 학생 제거"
+                  style={{
+                    marginLeft: 6,
+                    width: 28, height: 28,
+                    borderRadius: 14,
+                    border: "none",
+                    background: "rgba(220,38,38,0.85)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontSize: 14, fontWeight: 800,
+                    lineHeight: "26px",
+                    flexShrink: 0,
+                  }}>×</button>
+              )}
             </div>
           );
         })}
@@ -643,7 +675,15 @@ function ImageList({ images, onRemove }) {
   const arr = Object.entries(images).sort((a,b) => (a[1].addedAt||0) - (b[1].addedAt||0));
   if (!arr.length) return <div style={{color: "#94a3b8", fontSize: 13}}>아직 업로드된 이미지가 없습니다.</div>;
   return (
-    <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8}}>
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
+      gap: 8,
+      maxHeight: "calc(100vh - 360px)",
+      minHeight: 160,
+      overflowY: "auto",
+      paddingRight: 4,
+    }}>
       {arr.map(([id, img]) => (
         <div key={id} style={{position: "relative"}}>
           <img src={img.dataUrl} alt={img.fileName}
@@ -750,10 +790,19 @@ function ArenaCore({ room, meId, meName, isTeacher, onExit, onEnd }) {
   const tileH = Math.max(36, Math.min(140, cellH * 0.85));
 
   return (
-    <div style={{...S.bg, padding: 0}}>
+    <div style={{
+      ...S.bg,
+      padding: 0,
+      minHeight: 0,
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+    }}>
       {/* 상단 바 */}
       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center",
-                   padding: "8px 16px", background: "#0b1224", borderBottom: "1px solid #1e293b"}}>
+                   padding: "8px 16px", background: "#0b1224", borderBottom: "1px solid #1e293b",
+                   flex: "0 0 auto"}}>
         <div style={{display:"flex", gap: 12, alignItems:"center"}}>
           <span style={{color: "#fff", fontWeight: 700}}>🎯 AI 이미지 배틀</span>
           {!isTeacher && <span style={{color:"#cbd5e1", fontSize: 13}}>나: {meName}</span>}
@@ -775,7 +824,7 @@ function ArenaCore({ room, meId, meName, isTeacher, onExit, onEnd }) {
 
       {/* 게임 영역 */}
       <div ref={arenaRef}
-           style={{position: "relative", width: "100%", height: "calc(100vh - 56px)", overflow: "hidden"}}>
+           style={{position: "relative", width: "100%", flex: "1 1 auto", overflow: "hidden"}}>
         {tileEntries.map(([tid, t]) => {
           const imgId = matchings[t.ownerId];
           const img = imgId ? images[imgId] : null;
