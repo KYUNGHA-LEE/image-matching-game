@@ -10,7 +10,7 @@ import { ref as dbRef, onValue, set, update, remove, push, child, get, runTransa
  * =======================================================================*/
 
 const ROOM = "default";
-const T_PASS = "123456";          // 선생님 비밀번호
+const T_PASS = "123123";          // 선생님 비밀번호
 const TILES_PER_PLAYER = 10;      // 한 사람당 복제 타일 수
 const DEFAULT_DURATION = 60;      // 기본 라운드 시간(초)
 const IMG_MAX_DIM = 512;          // 업로드 이미지 최대 변 길이 (자동 압축)
@@ -114,10 +114,27 @@ function useRoom() {
 /* =======================================================================
  *  메인 컴포넌트
  * =====================================================================*/
+function getInitialMode() {
+  if (typeof window === "undefined") return "student";
+  return window.location.hash === "#teacher" ? "teacher" : "student";
+}
+
 export default function App() {
-  const [mode, setMode] = useState(null); // null | "teacher" | "student"
+  // URL 해시로 분기:
+  //   #teacher → 선생님 모드 (비번 입력 후 패널)
+  //   그 외     → 학생 모드 (닉네임 입력 후 입장)
+  const [mode, setMode] = useState(getInitialMode);
   const [meId, setMeId] = useState(null);
   const [meName, setMeName] = useState("");
+
+  // URL 해시가 바뀌면(예: 선생님이 직접 # 지움) 모드도 갱신
+  useEffect(() => {
+    const onHashChange = () => {
+      setMode(window.location.hash === "#teacher" ? "teacher" : "student");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   // 학생일 때 자동 하트비트(접속 유지) 처리는 단순화 — 페이지 닫기 시 지움
   useEffect(() => {
@@ -130,8 +147,17 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [mode, meId]);
 
-  if (!mode) return <RoleSelect onPick={setMode} />;
-  if (mode === "teacher") return <TeacherPanel onExit={() => setMode(null)} />;
+  if (mode === "teacher") {
+    return (
+      <TeacherPanel onExit={() => {
+        // 선생님 패널 종료 → 학생 모드로 전환 (URL의 #teacher 제거)
+        if (window.location.hash) {
+          history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
+        setMode("student");
+      }} />
+    );
+  }
   return (
     <StudentPanel
       meId={meId}
@@ -139,7 +165,7 @@ export default function App() {
       onJoined={(id, name) => { setMeId(id); setMeName(name); }}
       onExit={() => {
         if (meId) remove(dbRef(db, `rooms/${ROOM}/players/${meId}`));
-        setMode(null); setMeId(null); setMeName("");
+        setMeId(null); setMeName("");
       }}
     />
   );
@@ -473,13 +499,33 @@ function TeacherPanel({ onExit }) {
     return <TeacherResultView room={room} onBack={backToLobby} onReset={fullReset} />;
   }
 
+  /* ------- 학생 입장 링크 복사 (해시 없는 깨끗한 URL) ------- */
+  const copyStudentUrl = async () => {
+    const url = window.location.origin + window.location.pathname;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = url; ta.style.position = "fixed"; ta.style.left = "-9999px";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+      sfx.ok();
+      alert("학생 입장 링크가 복사되었습니다!\n\n" + url + "\n\n패들렛이나 채팅에 붙여넣어 학생들에게 공유하세요.");
+    } catch (err) {
+      prompt("아래 링크를 직접 복사하세요:", url);
+    }
+  };
+
   /* ------- 로비/매칭 단계 ------- */
   return (
     <div style={S.bg}>
       <div style={{...S.card, maxWidth: 980}}>
-        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8}}>
           <h2 style={{color: "#fff", margin: 0}}>🧑‍🏫 선생님 패널</h2>
-          <div style={{display:"flex", gap: 8}}>
+          <div style={{display:"flex", gap: 8, flexWrap: "wrap"}}>
+            <button style={{...S.btn, ...S.btnPrimary}} onClick={copyStudentUrl}>📋 학생 입장 링크 복사</button>
             <button style={{...S.btn, ...S.btnGhost}} onClick={fullReset}>🗑 전체 초기화</button>
             <button style={{...S.btn, ...S.btnGhost}} onClick={onExit}>나가기</button>
           </div>
