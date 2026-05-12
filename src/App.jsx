@@ -116,13 +116,13 @@ function useRoom() {
  * =====================================================================*/
 function getInitialMode() {
   if (typeof window === "undefined") return "student";
-  return window.location.hash === "#teacher" ? "teacher" : "student";
+  return window.location.hash === "#leethemom" ? "teacher" : "student";
 }
 
 export default function App() {
   // URL 해시로 분기:
-  //   #teacher → 선생님 모드 (비번 입력 후 패널)
-  //   그 외     → 학생 모드 (닉네임 입력 후 입장)
+  //   #leethemom → 선생님 모드 (비번 입력 후 패널)
+  //   그 외       → 학생 모드 (닉네임 입력 후 입장)
   const [mode, setMode] = useState(getInitialMode);
   const [meId, setMeId] = useState(null);
   const [meName, setMeName] = useState("");
@@ -130,7 +130,7 @@ export default function App() {
   // URL 해시가 바뀌면(예: 선생님이 직접 # 지움) 모드도 갱신
   useEffect(() => {
     const onHashChange = () => {
-      setMode(window.location.hash === "#teacher" ? "teacher" : "student");
+      setMode(window.location.hash === "#leethemom" ? "teacher" : "student");
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -150,7 +150,7 @@ export default function App() {
   if (mode === "teacher") {
     return (
       <TeacherPanel onExit={() => {
-        // 선생님 패널 종료 → 학생 모드로 전환 (URL의 #teacher 제거)
+        // 선생님 패널 종료 → 학생 모드로 전환 (URL의 #leethemom 제거)
         if (window.location.hash) {
           history.replaceState(null, "", window.location.pathname + window.location.search);
         }
