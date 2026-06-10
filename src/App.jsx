@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { db } from "./firebase";
+import { db, authReady } from "./firebase";
 import { ref as dbRef, onValue, set, update, remove, push, child, get, runTransaction } from "firebase/database";
 
 /* =========================================================================
@@ -96,14 +96,18 @@ function useRoom() {
     tiles: {},
   });
   useEffect(() => {
-    const unsub = onValue(roomRef(), (snap) => {
-      const v = snap.val() || {};
-      setData({
-        state: v.state || null,
-        players: v.players || {},
-        images: v.images || {},
-        matchings: v.matchings || {},
-        tiles: v.tiles || {},
+    // 익명 로그인이 끝난 뒤에 DB 구독 시작 (보안 규칙 auth != null 대응)
+    let unsub = () => {};
+    authReady.then(() => {
+      unsub = onValue(roomRef(), (snap) => {
+        const v = snap.val() || {};
+        setData({
+          state: v.state || null,
+          players: v.players || {},
+          images: v.images || {},
+          matchings: v.matchings || {},
+          tiles: v.tiles || {},
+        });
       });
     });
     return () => unsub();
