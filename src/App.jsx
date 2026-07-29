@@ -3,7 +3,7 @@ import { db, authReady } from "./firebase";
 import { ref as dbRef, onValue, set, update, remove, push, child, get, runTransaction } from "firebase/database";
 
 /* =========================================================================
- * 🎯 AI 이미지 배틀
+ * 🎯 클릭클릭 이미지카드 체인지
  * 1단계: 학생 닉네임 입장 → 리스트1 / 선생님 이미지 업로드 → 리스트2 / [매칭] 버튼
  * 2단계: 시간 설정 → [게임시작] → 이미지 10배 복제, 화면 자동 스프레드
  *        → 다른 사람 이미지 클릭 시 내 이미지로 변경 → 1~5등 실시간 랭킹
@@ -118,26 +118,34 @@ function useRoom() {
 /* =======================================================================
  *  메인 컴포넌트
  * =====================================================================*/
+function isAdminUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("mode") === "admin") return true;
+  return window.location.hash === "#leethemom"; // 예전 주소도 계속 동작
+}
+
 function getInitialMode() {
   if (typeof window === "undefined") return "student";
-  return window.location.hash === "#leethemom" ? "teacher" : "student";
+  return isAdminUrl() ? "teacher" : "student";
 }
 
 export default function App() {
-  // URL 해시로 분기:
-  //   #leethemom → 선생님 모드 (비번 입력 후 패널)
-  //   그 외       → 학생 모드 (닉네임 입력 후 입장)
+  // URL 쿼리로 분기:
+  //   ?mode=admin → 선생님 모드 (비번 입력 후 패널)
+  //   그 외        → 학생 모드 (닉네임 입력 후 입장)
   const [mode, setMode] = useState(getInitialMode);
   const [meId, setMeId] = useState(null);
   const [meName, setMeName] = useState("");
 
-  // URL 해시가 바뀌면(예: 선생님이 직접 # 지움) 모드도 갱신
+  // 주소가 바뀌면(뒤로가기 등) 모드도 갱신
   useEffect(() => {
-    const onHashChange = () => {
-      setMode(window.location.hash === "#leethemom" ? "teacher" : "student");
+    const onUrlChange = () => setMode(isAdminUrl() ? "teacher" : "student");
+    window.addEventListener("popstate", onUrlChange);
+    window.addEventListener("hashchange", onUrlChange);
+    return () => {
+      window.removeEventListener("popstate", onUrlChange);
+      window.removeEventListener("hashchange", onUrlChange);
     };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   // 학생일 때 자동 하트비트(접속 유지) 처리는 단순화 — 페이지 닫기 시 지움
@@ -154,10 +162,8 @@ export default function App() {
   if (mode === "teacher") {
     return (
       <TeacherPanel onExit={() => {
-        // 선생님 패널 종료 → 학생 모드로 전환 (URL의 #leethemom 제거)
-        if (window.location.hash) {
-          history.replaceState(null, "", window.location.pathname + window.location.search);
-        }
+        // 선생님 패널 종료 → 학생 모드로 전환 (URL의 ?mode=admin·#leethemom 제거)
+        history.replaceState(null, "", window.location.pathname);
         setMode("student");
       }} />
     );
@@ -182,7 +188,7 @@ function RoleSelect({ onPick }) {
   return (
     <div style={S.bg}>
       <div style={{...S.card, maxWidth: 520, textAlign: "center"}}>
-        <h1 style={{margin: 0, fontSize: 32, color: "#fff"}}>🎯 AI 이미지 배틀</h1>
+        <h1 style={{margin: 0, fontSize: 32, color: "#fff"}}>🎯 클릭클릭 이미지카드 체인지</h1>
         <p style={{color: "#cbd5e1", marginTop: 8}}>실시간 이미지 점령 게임</p>
         <div style={{display: "flex", gap: 12, marginTop: 24, justifyContent: "center"}}>
           <button style={{...S.btn, ...S.btnPrimary, fontSize: 18, padding: "14px 28px"}}
@@ -503,7 +509,7 @@ function TeacherPanel({ onExit }) {
     return <TeacherResultView room={room} onBack={backToLobby} onReset={fullReset} />;
   }
 
-  /* ------- 학생 입장 링크 복사 (해시 없는 깨끗한 URL) ------- */
+  /* ------- 학생 입장 링크 복사 (쿼리 없는 깨끗한 URL) ------- */
   const copyStudentUrl = async () => {
     const url = window.location.origin + window.location.pathname;
     try {
@@ -854,7 +860,7 @@ function ArenaCore({ room, meId, meName, isTeacher, onExit, onEnd }) {
                    padding: "8px 16px", background: "#0b1224", borderBottom: "1px solid #1e293b",
                    flex: "0 0 auto"}}>
         <div style={{display:"flex", gap: 12, alignItems:"center"}}>
-          <span style={{color: "#fff", fontWeight: 700}}>🎯 AI 이미지 배틀</span>
+          <span style={{color: "#fff", fontWeight: 700}}>🎯 클릭클릭 이미지카드 체인지</span>
           {!isTeacher && <span style={{color:"#cbd5e1", fontSize: 13}}>나: {meName}</span>}
           {!isTeacher && matchings[meId] && images[matchings[meId]] && (
             <img src={images[matchings[meId]].dataUrl} alt=""
