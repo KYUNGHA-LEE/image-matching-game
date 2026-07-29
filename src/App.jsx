@@ -3,7 +3,7 @@ import { db, authReady } from "./firebase";
 import { ref as dbRef, onValue, set, update, remove, push, child, get, runTransaction } from "firebase/database";
 
 /* =========================================================================
- * 🎯 클릭클릭 이미지카드 체인지
+ * 👆 클릭클릭 이미지카드 체인지
  * 1단계: 학생 닉네임 입장 → 리스트1 / 선생님 이미지 업로드 → 리스트2 / [매칭] 버튼
  * 2단계: 시간 설정 → [게임시작] → 이미지 10배 복제, 화면 자동 스프레드
  *        → 다른 사람 이미지 클릭 시 내 이미지로 변경 → 1~5등 실시간 랭킹
@@ -188,7 +188,7 @@ function RoleSelect({ onPick }) {
   return (
     <div style={S.bg}>
       <div style={{...S.card, maxWidth: 520, textAlign: "center"}}>
-        <h1 style={{margin: 0, fontSize: 32, color: "#fff"}}>🎯 클릭클릭 이미지카드 체인지</h1>
+        <h1 style={{margin: 0, fontSize: 32, color: "#fff"}}>👆 클릭클릭 이미지카드 체인지</h1>
         <p style={{color: "#cbd5e1", marginTop: 8}}>실시간 이미지 점령 게임</p>
         <div style={{display: "flex", gap: 12, marginTop: 24, justifyContent: "center"}}>
           <button style={{...S.btn, ...S.btnPrimary, fontSize: 18, padding: "14px 28px"}}
@@ -860,7 +860,7 @@ function ArenaCore({ room, meId, meName, isTeacher, onExit, onEnd }) {
                    padding: "8px 16px", background: "#0b1224", borderBottom: "1px solid #1e293b",
                    flex: "0 0 auto"}}>
         <div style={{display:"flex", gap: 12, alignItems:"center"}}>
-          <span style={{color: "#fff", fontWeight: 700}}>🎯 클릭클릭 이미지카드 체인지</span>
+          <span style={{color: "#fff", fontWeight: 700}}>👆 클릭클릭 이미지카드 체인지</span>
           {!isTeacher && <span style={{color:"#cbd5e1", fontSize: 13}}>나: {meName}</span>}
           {!isTeacher && matchings[meId] && images[matchings[meId]] && (
             <img src={images[matchings[meId]].dataUrl} alt=""
